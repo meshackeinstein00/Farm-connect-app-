@@ -1,0 +1,358 @@
+<?php
+session_start();
+?>
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+ <meta charset="UTF-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ <title>Farm Connect</title>
+ <style>
+ body {
+ font-family: Arial, sans-serif;
+ margin: 0;
+ padding: 0;
+ background-color: #f4f4f4;
+ }
+
+ header {
+ background-color: #4CAF50;
+ color: white;
+ padding: 10px 0;
+ text-align: center;
+ }
+
+ nav ul {
+ list-style: none;
+ padding: 0;
+ }
+
+ nav ul li {
+ display: inline;
+ margin: 0 10px;
+ }
+
+ nav ul li a {
+ color: white;
+ text-decoration: none;
+ }
+
+ main {
+ padding: 20px;
+ }
+
+ section {
+ margin-bottom: 20px;
+ }
+
+ form label, form input, form textarea {
+ display: block;
+ width: 100%;
+ margin-bottom: 10px;
+ }
+
+ form input, form textarea {
+ padding: 10px;
+ border: 1px solid #ccc;
+ border-radius: 4px;
+ }
+
+ form button {
+ background-color: #4CAF50;
+ color: white;
+ border: none;
+ padding: 10px 20px;
+ border-radius: 4px;
+ cursor: pointer;
+ }
+
+ form button:hover {
+ background-color: #45a049;
+ }
+
+ .product-list {
+ display: flex;
+ flex-wrap: nowrap;
+ overflow-x: auto;
+ }
+
+ .product {
+ background-color: white;
+ border: 1px solid #ddd;
+ border-radius: 4px;
+ padding: 10px;
+ margin: 10px;
+ width: 200px;
+ box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+ flex: 0 0 auto;
+ position: relative;
+ }
+
+ .product img {
+ width: 100%;
+ height: 150px;
+ object-fit: cover;
+ border-radius: 4px;
+ }
+
+ .product h3 {
+ margin-top: 0;
+ }
+
+ .product button {
+ background-color: #4CAF50;
+ color: white;
+ border: none;
+ padding: 10px;
+ border-radius: 4px;
+ cursor: pointer;
+ margin-right: 5px;
+ }
+
+ .product button:hover {
+ background-color: #45a049;
+ }
+
+ .product-status {
+ position: absolute;
+ bottom: 10px;
+ left: 10px;
+ color: white;
+ background-color: #4CAF50;
+ padding: 5px;
+ border-radius: 4px;
+ font-size: 12px;
+ }
+
+ footer {
+ text-align: center;
+ padding: 10px;
+ background-color: #4CAF50;
+ color: white;
+ }
+
+ .loading {
+ display: none;
+ text-align: center;
+ font-size: 18px;
+ color: #4CAF50;
+ }
+
+ .error {
+ color: red;
+ text-align: center;
+ display: none;
+ }
+ </style>
+</head>
+<body>
+ <header>
+ <h1>Farm Connect</h1>
+ <nav>
+ <ul>
+ <li><a href="home.php">Home</a></li>
+ <li><a href="products.php">Products</a></li>
+ <li><a href="purchases.php">Purchases</a></li>
+ <li><a href="about.php">About</a></li>
+ <?php if (isset($_SESSION['username'])): ?>
+ <li><a href="#">Welcome, <?php echo htmlspecialchars($_SESSION['username']); 
+?></a></li>
+ <li><a href="logout.php">Logout</a></li>
+ <?php else: ?>
+ <li><a href="login.php">Login</a></li>
+ <li><a href="register.php">Register</a></li>
+ <?php endif; ?>
+ </ul>
+ </nav>
+ </header>
+
+ <main>
+ <section id="post-product">
+ <h2>Post Your Product</h2>
+ <form id="post-form" enctype="multipart/form-data">
+ <label for="product-name">Product Name:</label>
+ <input type="text" id="product-name" name="product-name" required>
+
+ <label for="product-description">Description:</label>
+ <textarea id="product-description" name="product-description" 
+required></textarea>
+
+ <label for="product-price">Price:</label>
+ <input type="number" id="product-price" name="product-price" required>
+
+ <label for="product-image">Image:</label>
+ <input type="file" id="product-image" name="product-image" required 
+accept="image/*">
+
+ <button type="submit">Post Product</button>
+ </form>
+ </section>
+
+ <section id="products">
+ <h2>Available Products</h2>
+ <div class="loading" id="loading">Loading...</div>
+ <div class="product-list" id="product-list">
+ <!-- Products will be dynamically added here -->
+ </div>
+ <div class="error" id="error">Failed to post product.</div>
+ </section>
+ </main>
+
+ <footer>
+ <p>&copy; 2024 Farm Connect. All rights reserved.</p>
+ </footer>
+
+ <script>
+ const postForm = document.getElementById('post-form');
+ const productList = document.getElementById('product-list');
+ const loadingIndicator = document.getElementById('loading');
+ const errorIndicator = document.getElementById('error');
+
+ postForm.addEventListener('submit', function(event) {
+ event.preventDefault();
+ postProduct();
+ });
+
+ function postProduct() {
+ loadingIndicator.style.display = 'block';
+ errorIndicator.style.display = 'none';
+
+ const formData = new FormData(postForm);
+ const product = {
+ name: formData.get('product-name'),
+ description: formData.get('product-description'),
+ price: formData.get('product-price'),
+ image: URL.createObjectURL(formData.get('product-image')),
+ status: 'loading...'
+ };
+
+ addProductToList(product, true);
+ localStorage.setItem('product', JSON.stringify(product));
+
+ fetch('post_product.php', {
+ method: 'POST',
+ body: formData
+ })
+ .then(response => response.json())
+ .then(savedProduct => {
+ updateProductStatus(savedProduct.id, 'Posted Online');
+ product.id = savedProduct.id;
+ localStorage.setItem('product', JSON.stringify(product));
+ loadingIndicator.style.display = 'none';
+ postForm.reset();
+ })
+ .catch(error => {
+ updateProductStatus(null, 'Failed to post product.');
+ loadingIndicator.style.display = 'none';
+ errorIndicator.style.display = 'block';
+ });
+ }
+
+ function fetchProducts() {
+ loadingIndicator.style.display = 'block';
+
+ fetch('get_products.php')
+ .then(response => response.json())
+ .then(products => {
+ productList.innerHTML = '';
+ products.forEach(product => addProductToList(product));
+ loadingIndicator.style.display = 'none';
+ })
+ .catch(() => {
+ loadingIndicator.style.display = 'none';
+ alert('Failed to load products.');
+ });
+ }
+
+ function addProductToList(product, isNew = false) {
+ const div = document.createElement('div');
+ div.classList.add('product');
+ div.dataset.productId = product.id;
+
+ const img = document.createElement('img');
+ img.src = product.image;
+ div.appendChild(img);
+
+ const h3 = document.createElement('h3');
+ h3.textContent = product.name;
+ div.appendChild(h3);
+
+ const pDescription = document.createElement('p');
+ pDescription.textContent = product.description;
+ div.appendChild(pDescription);
+
+ const pPrice = document.createElement('p');
+ pPrice.textContent = 'Price: KES ' + product.price;
+ div.appendChild(pPrice);
+
+ const buttonContainer = document.createElement('div');
+ buttonContainer.style.display = 'flex';
+
+ const contactButton = document.createElement('button');
+ contactButton.textContent = 'Contact Seller';
+ buttonContainer.appendChild(contactButton);
+
+ const deleteButton = document.createElement('button');
+ deleteButton.textContent = 'Delete';
+ deleteButton.onclick = () => deleteProduct(product.id, div);
+ buttonContainer.appendChild(deleteButton);
+
+ div.appendChild(buttonContainer);
+
+ const status = document.createElement('p');
+ status.classList.add('product-status');
+ status.textContent = product.status;
+ div.appendChild(status);
+
+ if (isNew) {
+ productList.insertBefore(div, productList.firstChild);
+ } else {
+ productList.appendChild(div);
+ }
+ }
+
+ function updateProductStatus(id, statusText) {
+ const products = document.querySelectorAll('.product');
+ products.forEach(product => {
+ const status = product.querySelector('.product-status');
+ if (product.dataset.productId == id || status.textContent === 'loading...') {
+ status.textContent = statusText;
+ }
+ });
+ }
+
+ function deleteProduct(id, productElement) {
+ // Remove product from view
+ productElement.remove();
+
+ // Optionally, delete product from the database
+ fetch(`delete_product.php?id=${id}`, {
+ method: 'DELETE'
+ })
+ .then(response => {
+ if (!response.ok) {
+ throw new Error('Failed to delete product.');
+ }
+ return response.json();
+ })
+ .then(result => {
+ if (result.success) {
+ // Successfully deleted product from database
+ console.log('Product deleted successfully');
+ } else {
+ // Handle the error case
+ alert('Failed to delete product from database.');
+ }
+ })
+ .catch(error => {
+ console.error('Error:', error);
+ alert('Failed to delete product from database.');
+ });
+ }
+
+ // Fetch products on page load
+ fetchProducts();
+ </script>
+</body>
+</html>
